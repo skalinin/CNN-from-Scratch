@@ -15,4 +15,4 @@ def create_indexes(size_axis, center_w_l):
 	coordinates_b = create_axis_indexes(size_axis=size_axis[1], center_w_l=center_w_l[1])
 	return coordinates_a, coordinates_b
 
-print(indexes(size_axis, center_w_l))
+print(create_indexes(size_axis, center_w_l))
