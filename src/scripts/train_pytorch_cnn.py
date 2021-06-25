@@ -1,0 +1,88 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import argparse
+import torchvision
+
+from cnn.transforms import PIL2numpy, Normalize, OneHot, ToTensor
+
+
+class Net(nn.Module):
+    def __init__(self):
+        super(Net, self).__init__()
+        self.conv1 = nn.Conv2d(1, 5, 2, 2)
+        self.conv2 = nn.Conv2d(5, 20, 3, 1)
+        self.fc1 = nn.Linear(500, 2000)
+        self.fc2 = nn.Linear(2000, 10)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = F.relu(x)
+        x = F.max_pool2d(x, 2)
+        x = self.conv2(x)
+        x = F.relu(x)
+        x = torch.flatten(x, 1)
+        x = self.fc1(x)
+        x = F.relu(x)
+        x = self.fc2(x)
+        output = F.softmax(x, dim=1)
+        return output
+
+
+def get_datasets():
+    transforms = torchvision.transforms.Compose([
+        PIL2numpy(),
+        Normalize(),
+        ToTensor()
+    ])
+    train_dataset = torchvision.datasets.MNIST(
+        root='/workdir/data',
+        train=True,
+        download=True,
+        transform=transforms
+    )
+    test_dataset = torchvision.datasets.MNIST(
+        root='/workdir/data',
+        train=False,
+        transform=transforms
+    )
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=1)
+    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1)
+    return train_loader, test_loader
+
+
+def main(args):
+    train_loader, test_loader = get_datasets()
+    model = Net()
+    model.train()
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+
+    loss_log = []
+    acc_log = []
+    print_log_freq = args.print_log_freq
+    for idx, (image, target) in enumerate(train_loader):
+        image = image.unsqueeze(0)  # Add batch channel
+        optimizer.zero_grad()
+        output = model(image)
+        loss = F.cross_entropy(output, target)
+        loss.backward()
+        optimizer.step()
+
+        loss_log.append(loss)
+        acc_log.append(output.argmax().item() == target.item())
+        if idx % print_log_freq == 0:
+            loss_avg = sum(loss_log)/len(loss_log)
+            acc_avg = sum(acc_log)/len(acc_log)
+            loss_log = []
+            acc_log = []
+            print(f'Step {idx}, Loss: {loss_avg:.4f}, '
+                  f'Accyracy: {acc_avg:.4f}')
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--print_log_freq', type=int, default=1000,
+                        help='Frequency of printing of training logs')
+    args = parser.parse_args()
+
+    main(args)
