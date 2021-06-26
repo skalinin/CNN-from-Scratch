@@ -1,7 +1,7 @@
 import numpy as np
 from cnn.model_old import (
-    convolution_feed, maxpool_feed, matrix2vector_tf, fc_multiplication,
-    loss_fn, fc_backpropagation, vector2matrix_tf, convolution_backpropagation,
+    convolution_feed, maxpool_feed, matrix2vector, fc_multiplication,
+    loss_fn, fc_backpropagation, vector2matrix, convolution_backpropagation,
     maxpool_back
 )
 
@@ -82,7 +82,7 @@ class CnnFromScratch:
             }
         )
         # flatten feature maps to vector
-        conv_y_2_vect = matrix2vector_tf(conv_y_2)
+        conv_y_2_vect = matrix2vector(conv_y_2)
         # first fully connected layer
         fc_y_1, self.fc_w_1, self.fc_b_1 = fc_multiplication(
             y_l_minus_1=conv_y_2_vect,
@@ -129,7 +129,7 @@ class CnnFromScratch:
                 alpha=self.model_config['learning_rate']
             )
             # convert vector to feature maps
-            dEdconv_y_2 = vector2matrix_tf(
+            dEdconv_y_2 = vector2matrix(
                 vector=dEdfc_y_0,
                 matrix_shape=conv_y_2[0].shape
             )
