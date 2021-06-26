@@ -6,6 +6,8 @@ from cnn.transforms import PIL2numpy, Normalize, OneHot
 from cnn.model import CnnFromScratch
 from cnn.model_old import loss_fn
 
+# from pudb import set_trace; set_trace()
+
 
 MODEL_SETTINGS = {
     'learning_rate': 0.01,
@@ -79,8 +81,6 @@ def main(args):
             acc_log = []
             print(f'Step {idx}, Loss: {loss_avg:.4f}, '
                   f'Accyracy: {acc_avg:.4f}')
-            save_path = os.path.join(args.save_path, 'test.npy')
-            model.save_weights(save_path)
 
 
 if __name__ == '__main__':
@@ -89,8 +89,6 @@ if __name__ == '__main__':
                         help='Frequency of printing of training logs')
     parser.add_argument('--load_path', type=str, default='',
                         help='Path to model weights to start training with')
-    parser.add_argument('--save_path', type=str, default='/workdir/data',
-                        help='Path to save model weights')
     args = parser.parse_args()
 
     main(args)

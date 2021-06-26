@@ -6,13 +6,15 @@ import torchvision
 
 from cnn.transforms import PIL2numpy, Normalize, OneHot, ToTensor
 
+# from pudb import set_trace; set_trace()
+
 
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
         self.conv1 = nn.Conv2d(1, 5, 2, 2)
-        self.conv2 = nn.Conv2d(5, 20, 3, 1)
-        self.fc1 = nn.Linear(500, 2000)
+        self.conv2 = nn.Conv2d(5, 20, 3, 1, padding=1)
+        self.fc1 = nn.Linear(980, 2000)
         self.fc2 = nn.Linear(2000, 10)
 
     def forward(self, x):
@@ -20,12 +22,12 @@ class Net(nn.Module):
         x = F.relu(x)
         x = F.max_pool2d(x, 2)
         x = self.conv2(x)
-        x = F.relu(x)
+        x = torch.sigmoid(x)
         x = torch.flatten(x, 1)
         x = self.fc1(x)
-        x = F.relu(x)
+        x = torch.sigmoid(x)
         x = self.fc2(x)
-        output = F.softmax(x, dim=1)
+        output = F.log_softmax(x, dim=1)
         return output
 
 
@@ -54,6 +56,10 @@ def get_datasets():
 def main(args):
     train_loader, test_loader = get_datasets()
     model = Net()
+    if args.load_path:
+        states = torch.load(args.load_path)
+        model.load_state_dict(states)
+        print('Model weights were loaded')
     model.train()
     optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
 
@@ -81,8 +87,10 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--print_log_freq', type=int, default=1000,
+    parser.add_argument('--print_log_freq', type=int, default=30,
                         help='Frequency of printing of training logs')
+    parser.add_argument('--load_path', type=str, default='',
+                        help='Path to model weights to start training with')
     args = parser.parse_args()
 
     main(args)
