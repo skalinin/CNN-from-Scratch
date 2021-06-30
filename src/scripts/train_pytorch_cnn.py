@@ -4,9 +4,7 @@ import torch.nn.functional as F
 import argparse
 import torchvision
 
-from cnn.transforms import PIL2numpy, Normalize, OneHot, ToTensor
-
-# from pudb import set_trace; set_trace()
+from cnn.transforms import PIL2numpy, Normalize, ToTensor
 
 
 class Net(nn.Module):
@@ -27,11 +25,10 @@ class Net(nn.Module):
         x = self.fc1(x)
         x = torch.sigmoid(x)
         x = self.fc2(x)
-        output = F.log_softmax(x, dim=1)
-        return output
+        return x  # log_softmax already in F.cross_entropy
 
 
-def get_datasets():
+def get_train_loader():
     transforms = torchvision.transforms.Compose([
         PIL2numpy(),
         Normalize(),
@@ -43,18 +40,12 @@ def get_datasets():
         download=True,
         transform=transforms
     )
-    test_dataset = torchvision.datasets.MNIST(
-        root='/workdir/data',
-        train=False,
-        transform=transforms
-    )
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=1)
-    test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=1)
-    return train_loader, test_loader
+    return train_loader
 
 
 def main(args):
-    train_loader, test_loader = get_datasets()
+    train_loader = get_train_loader()
     model = Net()
     if args.load_path:
         states = torch.load(args.load_path)
@@ -67,7 +58,7 @@ def main(args):
     acc_log = []
     print_log_freq = args.print_log_freq
     for idx, (image, target) in enumerate(train_loader):
-        image = image.unsqueeze(0)  # Add batch channel
+        image = image.unsqueeze(0)  # Add channel to make input 4D
         optimizer.zero_grad()
         output = model(image)
         loss = F.cross_entropy(output, target)

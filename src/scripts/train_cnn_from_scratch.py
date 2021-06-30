@@ -1,12 +1,9 @@
 import torchvision
 import argparse
-import os
 
 from cnn.transforms import PIL2numpy, Normalize, OneHot
 from cnn.model import CnnFromScratch
 from cnn.model_old import loss_fn
-
-# from pudb import set_trace; set_trace()
 
 
 MODEL_SETTINGS = {
@@ -33,7 +30,7 @@ MODEL_SETTINGS = {
 }
 
 
-def get_datasets():
+def get_train_dataset():
     transforms = torchvision.transforms.Compose([
         PIL2numpy(),
         Normalize(),
@@ -48,17 +45,11 @@ def get_datasets():
         transform=transforms,
         target_transform=target_transform
     )
-    test_dataset = torchvision.datasets.MNIST(
-        root='/workdir/data',
-        train=False,
-        transform=transforms,
-        target_transform=target_transform
-    )
-    return train_dataset, test_dataset
+    return train_dataset
 
 
 def main(args):
-    train_dataset, test_dataset = get_datasets()
+    train_dataset = get_train_dataset()
     model = CnnFromScratch(
         train_mode=True,
         model_config=MODEL_SETTINGS,
