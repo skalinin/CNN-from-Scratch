@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import argparse
 
-from scripts.train_pytorch_cnn import Net
+from scripts.train_torch_model import Net
 
 
 def conv_weights_converter(conv_weights):
@@ -61,7 +61,7 @@ if __name__ == '__main__':
                         default='/workdir/data/torch_init_weights.ckpt',
                         help='Path to save initial torch model weights')
     parser.add_argument('--numpy_model_path', type=str,
-                        default='/workdir/data/numpy_init_weights.ckpt',
+                        default='/workdir/data/numpy_init_weights.npy',
                         help='Path to save initial numpy model weights')
     args = parser.parse_args()
 

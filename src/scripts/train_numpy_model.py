@@ -2,7 +2,7 @@ import torchvision
 import argparse
 
 from cnn.transforms import PIL2numpy, Normalize, OneHot
-from cnn.model import CnnFromScratch
+from cnn.numpy_model import CnnFromScratch
 from cnn.model_old import loss_fn
 
 
