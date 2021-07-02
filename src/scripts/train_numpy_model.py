@@ -3,7 +3,7 @@ import argparse
 
 from cnn.transforms import PIL2numpy, Normalize, OneHot
 from cnn.numpy_model import CnnFromScratch
-from cnn.model_old import loss_fn
+from cnn.model_old import CrossEntropyLoss
 
 
 MODEL_SETTINGS = {
@@ -16,7 +16,10 @@ MODEL_SETTINGS = {
     'conv_stride_1': 2,
     'conv_stride_2': 1,
     'maxpool_stride_1': 2,
-    'fc_neurons_1': 2000,
+    'fc_1_in_features': 980,
+    'fc_1_out_features': 2000,
+    'fc_2_in_features': 2000,
+    'fc_2_out_features': 10,
     'conv_fn_1': 'relu',
     'conv_fn_2': 'sigmoid',
     'fc_fn_1': 'sigmoid',
@@ -50,21 +53,23 @@ def get_train_dataset():
 
 def main(args):
     train_dataset = get_train_dataset()
-    model = CnnFromScratch(
-        train_mode=True,
-        model_config=MODEL_SETTINGS,
-        load_path=args.load_path
-    )
+    model = CnnFromScratch(MODEL_SETTINGS)
+    model.load_weights(args.load_path)
+    criterion = CrossEntropyLoss()
 
     loss_log = []
     acc_log = []
     print_log_freq = args.print_log_freq
     for idx, (image, target) in enumerate(train_dataset):
-        output = model([image], target)
-        loss = loss_fn(target, output, feed=True)
+        predict = model([image], target)
+        loss = criterion(target, predict)
 
         loss_log.append(loss.sum())
-        acc_log.append(output.argmax() == target.argmax())
+        acc_log.append(predict.argmax() == target.argmax())
+
+        x = criterion.backprop(target, predict)
+        model.backprop(x)
+
         if idx % print_log_freq == 0:
             loss_avg = sum(loss_log)/len(loss_log)
             acc_avg = sum(acc_log)/len(acc_log)

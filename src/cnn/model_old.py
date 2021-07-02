@@ -44,14 +44,14 @@ def load_weight_from_npy(weight_name, load_path):
 
 class Conv2d:
     def __init__(
-        self, stride, center_w_l, convolution, in_channels,
+        self, stride, kernel_center, convolution, in_channels,
         out_channels, kernel_size, learning_rate
     ):
         self.stride = stride
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
-        self.center_w_l = center_w_l
+        self.kernel_center = kernel_center
         self.convolution = convolution
         self.learning_rate = learning_rate
 
@@ -74,7 +74,7 @@ class Conv2d:
 
     def convolution_feed_x_l(self, y_l_minus_1, w_l):
         stride = self.stride
-        indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.center_w_l)
+        indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
         # матрица выхода будет расширяться по мере добавления новых элементов
         x_l = np.zeros((1, 1))
         # в зависимости от типа операции меняется основная формула функции
@@ -123,7 +123,7 @@ class Conv2d:
 
     def convolution_back_dEdw_l(self, y_l_minus_1, w_l_shape, dEdx_l):
         stride = self.stride
-        indexes_a, indexes_b = get_axes_indexes(w_l_shape, self.center_w_l)
+        indexes_a, indexes_b = get_axes_indexes(w_l_shape, self.kernel_center)
         dEdw_l = np.zeros((w_l_shape[0], w_l_shape[1]))
         # в зависимости от типа операции меняется основная формула функции
         if self.convolution:
@@ -160,7 +160,7 @@ class Conv2d:
         return dEdw_l
 
     def convolution_back_dEdy_l_minus_1(self, dEdx_l, w_l, y_l_minus_1_shape):
-        indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.center_w_l)
+        indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
         dEdy_l_minus_1 = np.zeros((y_l_minus_1_shape[0], y_l_minus_1_shape[1]))
         # в зависимости от типа операции меняется основная формула функции
         if self.convolution:
@@ -192,7 +192,7 @@ class Conv2d:
                 # print('i=' + str(i) + '; j=' + str(j) + '\n', demo)
         return dEdy_l_minus_1
 
-    def feedforward(self, y_l_minus_1):
+    def __call__(self, y_l_minus_1):
         x_l = []
         for i in range(self.in_channels):
             for j in range(i*self.out_channels, (i + 1)*self.out_channels):
@@ -216,7 +216,7 @@ class Conv2d:
         self.y_l_minus_1 = y_l_minus_1  # need for backprop
         return x_l_final
 
-    def backpropagation(self, dEdx_l):
+    def backprop(self, dEdx_l):
         list_of_dEdy_l_minus_1 = []
         for i in range(self.out_channels):
             # вследствие того, что только одна b_l приходится на одну карту
@@ -256,27 +256,46 @@ class Conv2d:
 
 
 class Sigmoid:
-    def feedforward(self, x_l):
+    def __call__(self, x_l):
         x_l = np.array(x_l)
         y_l = 1 / (1+np.exp(-x_l))
         self.y_l = y_l  # need for backprop
         return y_l
 
-    def backpropagation(self, dEdy_l):
+    def backprop(self, dEdy_l):
         dy_ldx_l = self.y_l * (1 - self.y_l)
         dEdx_l = dEdy_l * dy_ldx_l
         return dEdx_l
 
 
+class Softmax:
+    def __call__(self, x_l):
+        x_l = np.array(x_l)
+        y_l = np.exp(x_l) / np.exp(x_l).sum()
+        self.y_l = y_l  # need for backprop
+        return y_l
+
+    def backprop(self, dEdy_l):
+        dy_ldx_l = np.zeros((self.y_l.shape[1], self.y_l.shape[1]))
+        for i in range(dy_ldx_l.shape[1]):
+            for j in range(dy_ldx_l.shape[1]):
+                if i==j:
+                    dy_ldx_l[i][i] = self.y_l[0][i]*(1 - self.y_l[0][i])
+                else:
+                    dy_ldx_l[i][j] = - self.y_l[0][i]*self.y_l[0][j]
+        dEdx_l = np.dot(dEdy_l, dy_ldx_l)
+        return dEdx_l
+
+
 class ReLU:
-    def feedforward(self, x_l):
+    def __call__(self, x_l):
         x_l = np.array(x_l)
         # zero out the elements that do not pass the condition
         y_l = np.where(x_l > 0, x_l, 0)
         self.y_l = y_l  # need for backprop
         return y_l
 
-    def backpropagation(self, dEdy_l):
+    def backprop(self, dEdy_l):
         dy_ldx_l = np.where(self.y_l < 0, self.y_l, 1)
         # there are no negative elements in y_l after relu feedforward pass
         # so we do not neet to zero out negative elements
@@ -285,164 +304,152 @@ class ReLU:
         return dEdx_l
 
 
-def maxpool(y_l, conv_params):
-    indexes_a, indexes_b = get_axes_indexes(conv_params['window_shape'], conv_params['center_window'])
-    stride = conv_params['stride']
-    # выходные матрицы будут расширяться по мере добавления новых элементов
-    y_l_mp = np.zeros((1,1)) # матрица y_l после операции макспулинга
-    y_l_mp_to_y_l = np.zeros((1,1), dtype='<U32') # матрица для backprop через слой макспулинга (внутри матрицы будет храниться текст)
-    # в зависимости от типа операции меняется основная формула функции
-    if conv_params['convolution']:
-        g = 1 # операция конволюции
-    else:
-        g = -1 # операция корреляции
-    # итерация по i и j входной матрицы y_l из предположения, что размерность выходной матрицы будет такой же
-    for i in range(y_l.shape[0]):
-        for j in range(y_l.shape[1]):
-            result = -np.inf
-            element_exists = False
-            for a in indexes_a:
-                for b in indexes_b:
-                    # проверка, чтобы значения индексов не выходили за границы
-                    if i*stride - g*a >= 0 and j*stride - g*b >= 0 \
-                    and i*stride - g*a < y_l.shape[0] and j*stride - g*b < y_l.shape[1]:
-                        if y_l[i*stride - g*a][j*stride - g*b] > result:
-                            result = y_l[i*stride - g*a][j*stride - g*b]
-                            i_back = i*stride - g*a
-                            j_back = j*stride - g*b
-                        element_exists = True
-            # запись полученных результатов только в том случае, если для данных i и j были произведены вычисления
-            if element_exists:
-                if i >= y_l_mp.shape[0]:
-                    # добавление строки, если не существует
-                    y_l_mp = np.vstack((y_l_mp, np.zeros(y_l_mp.shape[1])))
-                    # матрица y_l_mp_to_y_l расширяется соответственно матрице y_l_mp
-                    y_l_mp_to_y_l = np.vstack((y_l_mp_to_y_l, np.zeros(y_l_mp_to_y_l.shape[1])))
-                if j >= y_l_mp.shape[1]:
-                    # добавление столбца, если не существует
-                    y_l_mp = np.hstack((y_l_mp, np.zeros((y_l_mp.shape[0],1))))
-                    y_l_mp_to_y_l = np.hstack((y_l_mp_to_y_l, np.zeros((y_l_mp_to_y_l.shape[0],1))))
-                y_l_mp[i][j] = result
-                # в матрице y_l_mp_to_y_l хранятся координаты значений,
-                # которые соответствуют выбранным в операции максипулинга ячейкам из матрицы y_l
-                y_l_mp_to_y_l[i][j] = str(i_back) + ',' + str(j_back)
-    return y_l_mp, y_l_mp_to_y_l
+class Maxpool2d:
+    def __init__(self, kernel_size, kernel_center, stride, convolution):
+        self.kernel_size = kernel_size
+        self.kernel_center = kernel_center
+        self.stride = stride
+        self.convolution = convolution
+
+    def maxpool(self, y_l):
+        indexes_a, indexes_b = get_axes_indexes(self.kernel_size, self.kernel_center)
+        stride = self.stride
+        # выходные матрицы будут расширяться по мере добавления новых элементов
+        y_l_mp = np.zeros((1,1)) # матрица y_l после операции макспулинга
+        y_l_mp_to_y_l = np.zeros((1,1), dtype='<U32') # матрица для backprop через слой макспулинга (внутри матрицы будет храниться текст)
+        # в зависимости от типа операции меняется основная формула функции
+        if self.convolution:
+            g = 1 # операция конволюции
+        else:
+            g = -1 # операция корреляции
+        # итерация по i и j входной матрицы y_l из предположения, что размерность выходной матрицы будет такой же
+        for i in range(y_l.shape[0]):
+            for j in range(y_l.shape[1]):
+                result = -np.inf
+                element_exists = False
+                for a in indexes_a:
+                    for b in indexes_b:
+                        # проверка, чтобы значения индексов не выходили за границы
+                        if i*stride - g*a >= 0 and j*stride - g*b >= 0 \
+                        and i*stride - g*a < y_l.shape[0] and j*stride - g*b < y_l.shape[1]:
+                            if y_l[i*stride - g*a][j*stride - g*b] > result:
+                                result = y_l[i*stride - g*a][j*stride - g*b]
+                                i_back = i*stride - g*a
+                                j_back = j*stride - g*b
+                            element_exists = True
+                # запись полученных результатов только в том случае, если для данных i и j были произведены вычисления
+                if element_exists:
+                    if i >= y_l_mp.shape[0]:
+                        # добавление строки, если не существует
+                        y_l_mp = np.vstack((y_l_mp, np.zeros(y_l_mp.shape[1])))
+                        # матрица y_l_mp_to_y_l расширяется соответственно матрице y_l_mp
+                        y_l_mp_to_y_l = np.vstack((y_l_mp_to_y_l, np.zeros(y_l_mp_to_y_l.shape[1])))
+                    if j >= y_l_mp.shape[1]:
+                        # добавление столбца, если не существует
+                        y_l_mp = np.hstack((y_l_mp, np.zeros((y_l_mp.shape[0],1))))
+                        y_l_mp_to_y_l = np.hstack((y_l_mp_to_y_l, np.zeros((y_l_mp_to_y_l.shape[0],1))))
+                    y_l_mp[i][j] = result
+                    # в матрице y_l_mp_to_y_l хранятся координаты значений,
+                    # которые соответствуют выбранным в операции максипулинга ячейкам из матрицы y_l
+                    y_l_mp_to_y_l[i][j] = str(i_back) + ',' + str(j_back)
+        return y_l_mp, y_l_mp_to_y_l
+
+    def __call__(self, y_l):
+        list_of_y_l_mp = []
+        list_of_y_l_mp_to_y_l = []
+        for i in range(len(y_l)): # итерация по всем feature map в y_l
+            y_l_mp, y_l_mp_to_y_l = self.maxpool(y_l[i])
+            # выход функции, матрица y_l после прохождения операции макспулинга
+            list_of_y_l_mp.append(y_l_mp)
+            # здесь хранятся координаты, которые позволят перевести "маленькую" матрицу dE/dy_l_mp к "большой" исходной матрице dE/dy_l
+            list_of_y_l_mp_to_y_l.append(y_l_mp_to_y_l)
+        self.list_of_y_l_mp_to_y_l = list_of_y_l_mp_to_y_l  # need for backprop
+        self.y_l_shape = y_l[0].shape  # take input shape to restore it on backprop stage
+        return list_of_y_l_mp
+
+    def backprop(self, dEdy_l_mp):
+        list_of_dEdy_l = []
+        for i in range(len(dEdy_l_mp)): # операция выполняется для каждой из feature map
+            dEdy_l = np.zeros(self.y_l_shape) # матрица dEdy_l будет далее постепенно заполнятся значениями
+            # проход по всем элементам матрицы dEdy_l_mp
+            for k in range(dEdy_l_mp[i].shape[0]):
+                for l in range(dEdy_l_mp[i].shape[1]):
+                    # каждый элемент матрицы dEdy_l_mp необходимо поставить в матрицу dEdy_l
+                    # для этого извлекаем необходимые координаты "назначения" из матрицы self.list_of_y_l_mp_to_y_l
+                    coordinates = self.list_of_y_l_mp_to_y_l[i][k][l] # коордианты выглядят так: 2,4 - то есть 2-ая строка и 4-ый столбец
+                    coordinate_row = int(coordinates[:coordinates.find(',')])
+                    coordinate_col = int(coordinates[coordinates.find(',')+1:])
+                    # запись по этим коордианатам в матрицу dEdy_l элемента из матрицы dEdy_l_mp
+                    dEdy_l[coordinate_row][coordinate_col] = dEdy_l_mp[i][k][l]
+            list_of_dEdy_l.append(dEdy_l) # добавляем получившуюся dEdy_l в лист с остальными feature map
+        return list_of_dEdy_l
 
 
-def maxpool_feed(y_l, conv_params):
-    list_of_y_l_mp = []
-    list_of_y_l_mp_to_y_l = []
-    for i in range(len(y_l)): # итерация по всем feature map в y_l
-        y_l_mp, y_l_mp_to_y_l = maxpool(y_l[i], conv_params)
-        # выход функции, матрица y_l после прохождения операции макспулинга
-        list_of_y_l_mp.append(y_l_mp)
-        # здесь хранятся координаты, которые позволят перевести "маленькую" матрицу dE/dy_l_mp к "большой" исходной матрице dE/dy_l
-        list_of_y_l_mp_to_y_l.append(y_l_mp_to_y_l)
-    return list_of_y_l_mp, list_of_y_l_mp_to_y_l
+class Linear:
+    def __init__(self, in_features, out_features, learning_rate):
+        self.in_features = in_features
+        self.out_features = out_features
+        self.learning_rate = learning_rate
+        self.init_weights()
+
+    def load_weights(self, weight_name, bias_name, load_path):
+        self.fc_w = load_weight_from_npy(weight_name, load_path)
+        self.fc_b = load_weight_from_npy(bias_name, load_path)
+
+    def init_weights(self):
+        self.fc_w = self.init_weight((self.in_features, self.out_features))
+        self.fc_b = self.init_weight((1, self.out_features))
+
+    def init_weight(self, weight_shape):
+        weight = 2 * np.random.random(weight_shape) - 1
+        return weight
+
+    def __call__(self, y_l_minus_1):
+        x_l = np.dot(y_l_minus_1, self.fc_w) + self.fc_b
+        self.y_l_minus_1 = y_l_minus_1  # need for backprop
+        return x_l
+
+    def backprop(self, dEdx_l):
+        # вычисление частных производных
+        dEdw_l = np.dot(self.y_l_minus_1.T, dEdx_l)
+        dEdb_l = dEdx_l
+        dEdy_l_minus_1 = np.dot(dEdx_l, self.fc_w.T)
+        # обновление матриц весов
+        self.fc_w = self.fc_w - self.learning_rate * dEdw_l
+        self.fc_b = self.fc_b - self.learning_rate * dEdb_l
+        return dEdy_l_minus_1
 
 
-def maxpool_back(dEdy_l_mp, y_l_mp_to_y_l, y_l_shape):
-    list_of_dEdy_l = []
-    for i in range(len(dEdy_l_mp)): # операция выполняется для каждой из feature map
-        dEdy_l = np.zeros(y_l_shape) # матрица dEdy_l будет далее постепенно заполнятся значениями
-        # проход по всем элементам матрицы dEdy_l_mp
-        for k in range(dEdy_l_mp[i].shape[0]):
-            for l in range(dEdy_l_mp[i].shape[1]):
-                # каждый элемент матрицы dEdy_l_mp необходимо поставить в матрицу dEdy_l
-                # для этого извлекаем необходимые координаты "назначения" из матрицы y_l_mp_to_y_l
-                coordinates = y_l_mp_to_y_l[i][k][l] # коордианты выглядят так: 2,4 - то есть 2-ая строка и 4-ый столбец
-                coordinate_row = int(coordinates[:coordinates.find(',')])
-                coordinate_col = int(coordinates[coordinates.find(',')+1:])
-                # запись по этим коордианатам в матрицу dEdy_l элемента из матрицы dEdy_l_mp
-                dEdy_l[coordinate_row][coordinate_col] = dEdy_l_mp[i][k][l]
-        list_of_dEdy_l.append(dEdy_l) # добавляем получившуюся dEdy_l в лист с остальными feature map
-    return list_of_dEdy_l
+class CrossEntropyLoss:
+    def __call__(self, target, predict):
+        return -target * np.log(predict)
+
+    def backprop(self, target, predict):
+        return -(target/predict)
 
 
-def fc_weights_init(shape, weights_name, dir_npy):
-    try:
-        weights_matrix = np.load(dir_npy, allow_pickle=True).item().get(weights_name)
-        print('веса для', weights_name, 'подгружены', weights_matrix.size)
-    except:
-        weights_matrix = 2 * np.random.random(shape) - 1
-        print('веса для', weights_name, 'созданы', weights_matrix.size)
-    return weights_matrix
+class MSELoss:
+    def __call__(self, target, predict):
+        return (target - predict)**2
+
+    def backprop(self, target, predict):
+        return predict - target
 
 
-def fc_multiplication(y_l_minus_1, w_l, w_l_name, b_l, b_l_name, neurons, act_fn, dir_npy):
-    if w_l.size == 0:
-        w_l = fc_weights_init(shape=(y_l_minus_1.shape[1], neurons), weights_name=w_l_name, dir_npy=dir_npy)
-        b_l = fc_weights_init(shape=(1, neurons), weights_name=b_l_name, dir_npy=dir_npy)
-    x_l = np.dot(y_l_minus_1, w_l) + b_l
-    y_l = activation_fn(x_l, fn_name=act_fn, feed=True)
-    return y_l, w_l, b_l
+class Flatten:
+    def matrices2vector(self, matrices):
+        vector = np.array([[]])
+        self.matrix_shape = matrices[0].shape
+        for i in range(len(matrices)):
+            reshaped_matrix = np.reshape(
+                matrices[i], (1, self.matrix_shape[0]*self.matrix_shape[1]))
+            vector = np.hstack((vector, reshaped_matrix))
+        return vector
 
-
-def activation_fn(matix, fn_name, feed):
-    output_matix = np.copy(matix)
-    if feed:
-        if fn_name == 'sigmoid':
-            output_matix = 1 / (1+np.exp(-output_matix)) # похоже, сообщение об ошибке можно проигнорировать https://stackoverflow.com/questions/23128401/overflow-error-in-neural-networks-implementation
-        if fn_name == 'relu':
-            output_matix[output_matix<0] = 0
-        if fn_name == 'softmax':
-            output_matix = np.exp(output_matix) / np.exp(output_matix).sum()
-    else:
-        if fn_name == 'sigmoid':
-            output_matix = output_matix * (1 - output_matix)
-        if fn_name == 'relu': # relu для backprop рассчитывается исходя из того, что на вход подается y_l, а не x_l
-            # output_matix[output_matix<=0] = 0 # после relu в матрице y_l не существует отрицательных значений
-            output_matix[output_matix>0] = 1
-        if fn_name == 'softmax':
-            input_matix = np.copy(matix)
-            output_matix = np.zeros((matix.shape[1], matix.shape[1]))
-            for i in range(output_matix.shape[1]):
-                for j in range(output_matix.shape[1]):
-                    if i==j:
-                        output_matix[i][i] = input_matix[0][i]*(1 - input_matix[0][i])
-                    else:
-                        output_matix[i][j] = - input_matix[0][i]*input_matix[0][j]
-    return output_matix
-
-
-def loss_fn(y_ground_truth, y_predicted, feed):
-    if feed:
-        # error_matix = (1/2)*(y_ground_truth - y_predicted)**2 # заменил на cross-entropy
-        error_matix = - y_ground_truth * np.log(y_predicted)
-    else:
-        # error_matix = y_predicted - y_ground_truth
-        error_matix = - (y_ground_truth/y_predicted)
-    return error_matix
-
-
-def matrix2vector(matrix):
-    vector = np.array([[]])
-    for i in range(len(matrix)):
-        reshaped_matrix = np.reshape(matrix[i], (1, matrix[i].shape[0]*matrix[i].shape[1]))
-        vector = np.hstack((vector, reshaped_matrix))
-    return vector
-
-
-def vector2matrix(vector, matrix_shape):
-    matrices = []
-    matrix_size = matrix_shape[0]*matrix_shape[1]
-    for i in range(0, vector.size, matrix_size):
-        matrix = np.reshape(vector[0][i:i+matrix_size], matrix_shape)
-        matrices.append(matrix)
-    return matrices
-
-
-def fc_backpropagation(y_l_minus_1, dEdy_l, y_l, w_l, b_l, act_fn, alpha):
-    # вычисление dE/dx_l, то есть backprop через функцию активации
-    if act_fn == 'softmax':
-        dEdx_l = np.dot(dEdy_l, activation_fn(y_l, fn_name=act_fn, feed=False))
-    else:
-        dEdx_l = dEdy_l * activation_fn(y_l, fn_name=act_fn, feed=False)
-    # вычисление частных производных
-    dEdw_l = np.dot(y_l_minus_1.T, dEdx_l)
-    dEdb_l = dEdx_l
-    dEdy_l_minus_1 = np.dot(dEdx_l, w_l.T)
-    # обновление матриц весов
-    w_l = w_l - alpha * dEdw_l
-    b_l = b_l - alpha * dEdb_l
-    return dEdy_l_minus_1, w_l, b_l
+    def vector2matrices(self, vector):
+        matrices = []
+        matrix_size = self.matrix_shape[0]*self.matrix_shape[1]
+        for i in range(0, vector.size, matrix_size):
+            matrix = np.reshape(vector[0][i:i+matrix_size], self.matrix_shape)
+            matrices.append(matrix)
+        return matrices
