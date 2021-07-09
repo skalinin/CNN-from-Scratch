@@ -87,7 +87,8 @@ def main(args):
     learning_rate = 0.01
     train_dataset = get_train_dataset()
     model = CnnFromScratch()
-    model.load_weights(args.load_path)
+    if args.load_path:
+        model.load_weights(args.load_path)
     criterion = CrossEntropyLoss()
 
     loss_log = []
@@ -97,12 +98,11 @@ def main(args):
         predict = model([image], target)
         loss = criterion(target, predict)
 
-        loss_log.append(loss.sum())
-        acc_log.append(predict.argmax() == target.argmax())
-
         x = criterion.backprop(target, predict)
         model.backprop(x, learning_rate)
 
+        loss_log.append(loss.sum())
+        acc_log.append(predict.argmax() == target.argmax())
         if idx % print_log_freq == 0:
             loss_avg = sum(loss_log)/len(loss_log)
             acc_avg = sum(acc_log)/len(acc_log)
