@@ -16,22 +16,22 @@ def get_axis_indexes(kernel_axis_length, center_index):
     return axis_indexes
 
 
-def get_axes_indexes(kernel_size, center_indexes):
+def get_axes_indexes(kernel_size, kernel_center):
     """Calculate the kernel axes indexes depending on the kernel center.
 
     Args:
         kernel_size (tuple of int): The size of the convolutional kernel,
             width and height, respectively.
-        center_indexes (tuple of int): The kernel center indexes. The first
+        kernel_center (tuple of int): The kernel center indexes. The first
             index should be on the x-axis, and the second on the y-axis.
     """
     indexes_a = get_axis_indexes(
         kernel_axis_length=kernel_size[0],
-        center_index=center_indexes[0]
+        center_index=kernel_center[0]
     )
     indexes_b = get_axis_indexes(
         kernel_axis_length=kernel_size[1],
-        center_index=center_indexes[1]
+        center_index=kernel_center[1]
     )
     return indexes_a, indexes_b
 
@@ -43,9 +43,24 @@ def load_weight_from_npy(weight_name, load_path):
 
 
 class Conv2d:
+    """Applies a 2D convolution over an input signal composed of several
+    input planes.
+
+    Args:
+        kernel_size (tuple of int): Size of the convolving kernel.
+        in_channels (int): Number of channels in the input image.
+        out_channels (int): Number of channels produced by the convolution.
+        stride (int): Stride of the convolution. Default is 1.
+        kernel_center (tuple of int): The kernel center indexes. The first
+            index should be on the x-axis, and the second on the y-axis.
+            Default is (0, 0)
+        convolution (book): Convolution or cross-correlation will be applied.
+            Default is False, which means cross-correlation.
+    """
+
     def __init__(
-        self, stride, kernel_center, in_channels, out_channels,
-        kernel_size, convolution=False
+        self, kernel_size, in_channels, out_channels, stride=1,
+        kernel_center=(0, 0), convolution=False
     ):
         self.stride = stride
         self.in_channels = in_channels
@@ -74,49 +89,43 @@ class Conv2d:
     def convolution_feed_x_l(self, y_l_minus_1, w_l):
         stride = self.stride
         indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
-        # матрица выхода будет расширяться по мере добавления новых элементов
-        x_l = np.zeros((1, 1))
-        # в зависимости от типа операции меняется основная формула функции
+        x_l = np.zeros((1, 1))  # x_l will expand as new elements are added
         if self.convolution:
-            g = 1  # операция конволюции
+            g = 1  # convolution
         else:
-            g = -1  # операция корреляции
-        # итерация по i и j входной матрицы y_l_minus_1 из предположения, что
-        # размерность выходной матрицы x_l будет такой же
+            g = -1  # cross-correlation
+        # iterate over the input y_l_minus_1 assuming that the dimension of the
+        # output x_l will be the same (x_l will expand during the calculations)
         for i in range(y_l_minus_1.shape[0]):
             for j in range(y_l_minus_1.shape[1]):
-                # матрица для демонстрации конволюции
                 demo = np.zeros([y_l_minus_1.shape[0], y_l_minus_1.shape[1]])
                 result = 0
                 element_exists = False
                 for a in indexes_a:
                     for b in indexes_b:
-                        # проверка, значения индексов не выходили за границы
+                        # check that indexes of a, b did not crossed the
+                        # boundaries of the y_l_minus_1
                         if (
                             i*stride - g*a >= 0
                             and j*stride - g*b >= 0
                             and i*stride - g*a < y_l_minus_1.shape[0]
                             and j*stride - g*b < y_l_minus_1.shape[1]
                         ):
-                            # indexes_a.index(a) перевод индексов в исходые
-                            # для извлечения элементов из матрицы w_l
+                            # convert indexes of a, b to a range of positive
+                            # numbers to extract data from w_l
                             result += \
                                 y_l_minus_1[i*stride - g*a][j*stride - g*b] * \
                                 w_l[indexes_a.index(a)][indexes_b.index(b)]
                             demo[i*stride - g*a][j*stride - g*b] = \
                                 w_l[indexes_a.index(a)][indexes_b.index(b)]
                             element_exists = True
-                # запись полученных результатов только в том случае, если для
-                # данных i и j были произведены вычисления
                 if element_exists:
                     if i >= x_l.shape[0]:
-                        # добавление строки, если не существует
                         x_l = np.vstack((x_l, np.zeros(x_l.shape[1])))
                     if j >= x_l.shape[1]:
-                        # добавление столбца, если не существует
                         x_l = np.hstack((x_l, np.zeros((x_l.shape[0], 1))))
                     x_l[i][j] = result
-                    # вывод матрицы demo для отслеживания хода свертки
+                    # print demo matrix for tracking the convolution progress
                     # print('i=' + str(i) + '; j=' + str(j) + '\n', demo)
         return x_l
 
@@ -124,22 +133,18 @@ class Conv2d:
         stride = self.stride
         indexes_a, indexes_b = get_axes_indexes(w_l_shape, self.kernel_center)
         dEdw_l = np.zeros((w_l_shape[0], w_l_shape[1]))
-        # в зависимости от типа операции меняется основная формула функции
         if self.convolution:
-            g = 1  # операция конволюции
+            g = 1  # convolution
         else:
-            g = -1  # операция корреляции
-        # итерация по a и b ядра свертки
+            g = -1  # cross-correlation
         for a in indexes_a:
             for b in indexes_b:
-                # размерность матрицы для демонстрации конволюции равна
-                # размерности y_l, так как эта матрица либо равна либо больше
-                # (в случае stride>1) матрицы x_l
                 demo = np.zeros([y_l_minus_1.shape[0], y_l_minus_1.shape[1]])
                 result = 0
                 for i in range(dEdx_l.shape[0]):
                     for j in range(dEdx_l.shape[1]):
-                        # проверка, значения индексов не выходили за границы
+                        # check that indexes of a, b did not crossed the
+                        # boundaries of the y_l_minus_1
                         if (
                             i*stride - g*a >= 0
                             and j*stride - g*b >= 0
@@ -151,31 +156,26 @@ class Conv2d:
                                 dEdx_l[i][j]
                             demo[i*stride - g*a][j*stride - g*b] = \
                                 dEdx_l[i][j]
-                # indexes_a.index(a) перевод индексов в исходые
-                # для извлечения элементов из матрицы w_l
+                # convert indexes of a, b to a range of positive
+                # numbers to extract data from w_l
                 dEdw_l[indexes_a.index(a)][indexes_b.index(b)] = result
-                # вывод матрицы demo для отслеживания хода свертки
+                # print demo matrix for tracking the convolution progress
                 # print('a=' + str(a) + '; b=' + str(b) + '\n', demo)
         return dEdw_l
 
     def convolution_back_dEdy_l_minus_1(self, dEdx_l, w_l, y_l_minus_1_shape):
         indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
         dEdy_l_minus_1 = np.zeros((y_l_minus_1_shape[0], y_l_minus_1_shape[1]))
-        # в зависимости от типа операции меняется основная формула функции
         if self.convolution:
-            g = 1  # операция конволюции
+            g = 1  # convolution
         else:
-            g = -1  # операция корреляции
+            g = -1  # cross-correlation
         for i in range(dEdy_l_minus_1.shape[0]):
             for j in range(dEdy_l_minus_1.shape[1]):
                 result = 0
-                # матрица для демонстрации конволюции
                 demo = np.zeros([dEdx_l.shape[0], dEdx_l.shape[1]])
                 for i_x_l in range(dEdx_l.shape[0]):
                     for j_x_l in range(dEdx_l.shape[1]):
-                        # перевод индексов в исходые для извлечения
-                        # элементов из матрицы w_l + проверка на вхождение в
-                        # диапазон индексов ядра свертки
                         a = g*i_x_l*self.stride - g*i
                         b = g*j_x_l*self.stride - g*j
                         if (
@@ -187,67 +187,60 @@ class Conv2d:
                             result += dEdx_l[i_x_l][j_x_l] * w_l[a][b]
                             demo[i_x_l][j_x_l] = w_l[a][b]
                 dEdy_l_minus_1[i][j] = result
-                # вывод матрицы demo для отслеживания хода свертки
+                # print demo matrix for tracking the convolution progress
                 # print('i=' + str(i) + '; j=' + str(j) + '\n', demo)
         return dEdy_l_minus_1
 
     def __call__(self, y_l_minus_1):
+        """Feedforward of a convolutional layer."""
         x_l = []
         for i in range(self.in_channels):
             for j in range(i*self.out_channels, (i + 1)*self.out_channels):
-                # для каждой y_l_minus_1 функция конволюции вызывается
-                # out_channels-раз для создания "промежуточных" x_l
+                # for each y_l_minus_1, the convolution is called
+                # out_channels-times to create "intermediate" x_l
                 x_l.append(
-                    self.convolution_feed_x_l(y_l_minus_1=y_l_minus_1[i],
-                                              w_l=self.conv_w[j])
-                )
-
+                    self.convolution_feed_x_l(y_l_minus_1[i], self.conv_w[j]))
         x_l_final = []
         for i in range(self.out_channels):
             x_l_final.append(0)
             for j in range(self.in_channels):
-                # "финальный" x_l_final является суммой "промежуточных" x_l,
-                # полученных с каждой y_l_minus_1
+                # the "final" x_l is the sum of the "intermediate" x_l
+                # received from each y_l_minus_1
                 x_l_final[-1] += x_l[j*self.out_channels + i]
-            # к x_l_final прибавляем соответствующий ему bias
+            # add bias to the x_l
             x_l_final[-1] += self.conv_b[len(x_l_final)-1]
-
         self.y_l_minus_1 = y_l_minus_1  # need for backprop
         return x_l_final
 
     def backprop(self, dEdx_l, learning_rate):
+        """Backpropagation of a convolutional layer.
+
+        Args:
+            dEdx_l: de/dx_l matrix.
+            learning_rate (float): The learning rate for training using SGD.
+        """
         list_of_dEdy_l_minus_1 = []
         for i in range(self.out_channels):
-            # вследствие того, что только одна b_l приходится на одну карту
-            # признаков, то dEdb_l является суммой по всем элементам dEdx_l
+            # due to the fact that one bias refers to the whole feature map,
+            # dE/db_l is the sum of all the elements of dE/dx_l
             dEdb_l = dEdx_l[i].sum()
-            # обновление b_l
             self.conv_b[i] = self.conv_b[i] - learning_rate * dEdb_l
         for i in range(self.in_channels):
             dEdy_l_minus_1 = 0
             k = 0
-            # далее итерация по "промежуточным" картам признаков,
-            # соответствующим i-тому входному каналу; сами "промежуточные"
-            # карты не используются! в вычислениях присутствуют только
-            # "финальные" карты; при этом количество "финальных" карт (здесь
-            # dEdx_l) равно out_channels, тогда как количество w_l равно
-            # out_channels*y_l_minus_1; отсюда использование дополнительного
-            # "итератора" k; таким образом к dEdx_l мы обращаемся с помощью k,
-            # а к w_l с помощью j
             for j in range(i*self.out_channels, (i + 1)*self.out_channels):
                 dEdw_l = self.convolution_back_dEdw_l(
-                    y_l_minus_1=self.y_l_minus_1[i],  # i-тый входной канал
-                    w_l_shape=self.conv_w[j].shape,  # j-тый w_l
-                    dEdx_l=dEdx_l[k],  # k-тый dEdx_l
+                    y_l_minus_1=self.y_l_minus_1[i],
+                    w_l_shape=self.conv_w[j].shape,
+                    dEdx_l=dEdx_l[k],
                 )
-                # через слой y_l_minus_1 проходят суммы показателей со
-                # всех карт признаков
+                # the backprop for dE/dy_l_minus_1 accumulates data from all
+                # the corresponding feature maps
                 dEdy_l_minus_1 += self.convolution_back_dEdy_l_minus_1(
-                    dEdx_l=dEdx_l[k],  # k-тый dEdx_l
-                    w_l=self.conv_w[j],  # j-тый w_l
-                    y_l_minus_1_shape=self.y_l_minus_1[i].shape,  # i-тый входной канал
+                    dEdx_l=dEdx_l[k],
+                    w_l=self.conv_w[j],
+                    y_l_minus_1_shape=self.y_l_minus_1[i].shape,
                 )
-                # обновление w_l
                 self.conv_w[j] = self.conv_w[j] - learning_rate * dEdw_l
                 k += 1
             list_of_dEdy_l_minus_1.append(dEdy_l_minus_1)
@@ -278,7 +271,7 @@ class Softmax:
         dy_ldx_l = np.zeros((self.y_l.shape[1], self.y_l.shape[1]))
         for i in range(dy_ldx_l.shape[1]):
             for j in range(dy_ldx_l.shape[1]):
-                if i==j:
+                if i == j:
                     dy_ldx_l[i][i] = self.y_l[0][i]*(1 - self.y_l[0][i])
                 else:
                     dy_ldx_l[i][j] = - self.y_l[0][i]*self.y_l[0][j]
@@ -304,9 +297,21 @@ class ReLU:
 
 
 class Maxpool2d:
+    """Applies a 2D max pooling over an input signal composed of several
+    input planes.
+
+    Args:
+        kernel_size (tuple of int): Size of the maxpooling kernel.
+        stride (int): Stride of the maxpooling. Default is 1.
+        kernel_center (tuple of int): The kernel center indexes. The first
+            index should be on the x-axis, and the second on the y-axis.
+            Default is (0, 0)
+        convolution (book): Convolution or cross-correlation will be applied.
+            Default is False, which means cross-correlation.
+    """
+
     def __init__(
-        self, kernel_size, stride, kernel_center=(0, 0),
-        convolution=False
+        self, kernel_size, stride=1, kernel_center=(0, 0), convolution=False
     ):
         self.kernel_size = kernel_size
         self.kernel_center = kernel_center
@@ -314,80 +319,90 @@ class Maxpool2d:
         self.convolution = convolution
 
     def maxpool(self, y_l):
-        indexes_a, indexes_b = get_axes_indexes(self.kernel_size, self.kernel_center)
+        indexes_a, indexes_b = get_axes_indexes(self.kernel_size,
+                                                self.kernel_center)
         stride = self.stride
-        # выходные матрицы будут расширяться по мере добавления новых элементов
-        y_l_mp = np.zeros((1,1)) # матрица y_l после операции макспулинга
-        y_l_mp_to_y_l = np.zeros((1,1), dtype='<U32') # матрица для backprop через слой макспулинга (внутри матрицы будет храниться текст)
-        # в зависимости от типа операции меняется основная формула функции
+        y_l_mp = np.zeros((1, 1))  # y_l_mp will expand as new elements are added
+        y_l_mp_to_y_l = np.zeros((1, 1), dtype='<U32')
         if self.convolution:
-            g = 1 # операция конволюции
+            g = 1  # convolution
         else:
-            g = -1 # операция корреляции
-        # итерация по i и j входной матрицы y_l из предположения, что размерность выходной матрицы будет такой же
+            g = -1  # cross-correlation
         for i in range(y_l.shape[0]):
             for j in range(y_l.shape[1]):
                 result = -np.inf
                 element_exists = False
                 for a in indexes_a:
                     for b in indexes_b:
-                        # проверка, чтобы значения индексов не выходили за границы
-                        if i*stride - g*a >= 0 and j*stride - g*b >= 0 \
-                        and i*stride - g*a < y_l.shape[0] and j*stride - g*b < y_l.shape[1]:
+                        if (
+                            i*stride - g*a >= 0
+                            and j*stride - g*b >= 0
+                            and i*stride - g*a < y_l.shape[0]
+                            and j*stride - g*b < y_l.shape[1]
+                        ):
                             if y_l[i*stride - g*a][j*stride - g*b] > result:
                                 result = y_l[i*stride - g*a][j*stride - g*b]
                                 i_back = i*stride - g*a
                                 j_back = j*stride - g*b
                             element_exists = True
-                # запись полученных результатов только в том случае, если для данных i и j были произведены вычисления
                 if element_exists:
                     if i >= y_l_mp.shape[0]:
-                        # добавление строки, если не существует
                         y_l_mp = np.vstack((y_l_mp, np.zeros(y_l_mp.shape[1])))
-                        # матрица y_l_mp_to_y_l расширяется соответственно матрице y_l_mp
-                        y_l_mp_to_y_l = np.vstack((y_l_mp_to_y_l, np.zeros(y_l_mp_to_y_l.shape[1])))
+                        y_l_mp_to_y_l = np.vstack(
+                            (y_l_mp_to_y_l, np.zeros(y_l_mp_to_y_l.shape[1])))
                     if j >= y_l_mp.shape[1]:
-                        # добавление столбца, если не существует
-                        y_l_mp = np.hstack((y_l_mp, np.zeros((y_l_mp.shape[0],1))))
-                        y_l_mp_to_y_l = np.hstack((y_l_mp_to_y_l, np.zeros((y_l_mp_to_y_l.shape[0],1))))
+                        y_l_mp = np.hstack(
+                            (y_l_mp, np.zeros((y_l_mp.shape[0], 1))))
+                        y_l_mp_to_y_l = np.hstack(
+                            (y_l_mp_to_y_l,
+                             np.zeros((y_l_mp_to_y_l.shape[0], 1)))
+                        )
                     y_l_mp[i][j] = result
-                    # в матрице y_l_mp_to_y_l хранятся координаты значений,
-                    # которые соответствуют выбранным в операции максипулинга ячейкам из матрицы y_l
                     y_l_mp_to_y_l[i][j] = str(i_back) + ',' + str(j_back)
         return y_l_mp, y_l_mp_to_y_l
 
     def __call__(self, y_l):
+        """Feedforward of a maxpooling layer."""
         list_of_y_l_mp = []
-        list_of_y_l_mp_to_y_l = []
-        for i in range(len(y_l)): # итерация по всем feature map в y_l
+        self.list_of_y_l_mp_to_y_l = []
+        for i in range(len(y_l)):
             y_l_mp, y_l_mp_to_y_l = self.maxpool(y_l[i])
-            # выход функции, матрица y_l после прохождения операции макспулинга
             list_of_y_l_mp.append(y_l_mp)
-            # здесь хранятся координаты, которые позволят перевести "маленькую" матрицу dE/dy_l_mp к "большой" исходной матрице dE/dy_l
-            list_of_y_l_mp_to_y_l.append(y_l_mp_to_y_l)
-        self.list_of_y_l_mp_to_y_l = list_of_y_l_mp_to_y_l  # need for backprop
-        self.y_l_shape = y_l[0].shape  # take input shape to restore it on backprop stage
+            # y_l_mp_to_y_l is stored the text (coords of the selected elements
+            # during feedforward) and needed for backprop: dE/dy_l_mp -> dE/dy_l
+            self.list_of_y_l_mp_to_y_l.append(y_l_mp_to_y_l)
+        # take an input shape to restore it on the backprop stage
+        self.y_l_shape = y_l[0].shape
         return list_of_y_l_mp
 
     def backprop(self, dEdy_l_mp):
+        """Backpropagation of a maxpooling layer."""
         list_of_dEdy_l = []
-        for i in range(len(dEdy_l_mp)): # операция выполняется для каждой из feature map
-            dEdy_l = np.zeros(self.y_l_shape) # матрица dEdy_l будет далее постепенно заполнятся значениями
-            # проход по всем элементам матрицы dEdy_l_mp
+        for i in range(len(dEdy_l_mp)):
+            # dEdy_l will expand as new elements are added
+            dEdy_l = np.zeros(self.y_l_shape)
             for k in range(dEdy_l_mp[i].shape[0]):
-                for l in range(dEdy_l_mp[i].shape[1]):
-                    # каждый элемент матрицы dEdy_l_mp необходимо поставить в матрицу dEdy_l
-                    # для этого извлекаем необходимые координаты "назначения" из матрицы self.list_of_y_l_mp_to_y_l
-                    coordinates = self.list_of_y_l_mp_to_y_l[i][k][l] # коордианты выглядят так: 2,4 - то есть 2-ая строка и 4-ый столбец
+                for e in range(dEdy_l_mp[i].shape[1]):
+                    # each element of the dEdy_l_mp must be placed in the
+                    # dEdy_l; to do this, we extract the necessary destination
+                    # coordinates from the list_of_y_l_mp_to_y_l
+                    coordinates = self.list_of_y_l_mp_to_y_l[i][k][e]
                     coordinate_row = int(coordinates[:coordinates.find(',')])
                     coordinate_col = int(coordinates[coordinates.find(',')+1:])
-                    # запись по этим коордианатам в матрицу dEdy_l элемента из матрицы dEdy_l_mp
-                    dEdy_l[coordinate_row][coordinate_col] = dEdy_l_mp[i][k][l]
-            list_of_dEdy_l.append(dEdy_l) # добавляем получившуюся dEdy_l в лист с остальными feature map
+                    dEdy_l[coordinate_row][coordinate_col] = dEdy_l_mp[i][k][e]
+            list_of_dEdy_l.append(dEdy_l)
         return list_of_dEdy_l
 
 
 class Linear:
+    """Applies a linear transformation to the incoming data.
+    Fully connected layer.
+
+    Args:
+        in_features (int): Size of each input sample.
+        out_features (int): Size of each output sample.
+    """
+
     def __init__(self, in_features, out_features):
         self.in_features = in_features
         self.out_features = out_features
@@ -406,16 +421,21 @@ class Linear:
         return weight
 
     def __call__(self, y_l_minus_1):
+        """Feedforward of a linear layer."""
         x_l = np.dot(y_l_minus_1, self.fc_w) + self.fc_b
         self.y_l_minus_1 = y_l_minus_1  # need for backprop
         return x_l
 
     def backprop(self, dEdx_l, learning_rate):
-        # вычисление частных производных
+        """Backpropagation of a linear layer.
+
+        Args:
+            dEdx_l: de/dx_l matrix.
+            learning_rate (float): The learning rate for training using SGD.
+        """
         dEdw_l = np.dot(self.y_l_minus_1.T, dEdx_l)
         dEdb_l = dEdx_l
         dEdy_l_minus_1 = np.dot(dEdx_l, self.fc_w.T)
-        # обновление матриц весов
         self.fc_w = self.fc_w - learning_rate * dEdw_l
         self.fc_b = self.fc_b - learning_rate * dEdb_l
         return dEdy_l_minus_1
