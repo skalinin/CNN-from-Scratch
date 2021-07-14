@@ -192,7 +192,12 @@ class Conv2d:
         return dEdy_l_minus_1
 
     def __call__(self, y_l_minus_1):
-        """Feedforward of a convolutional layer."""
+        """Feedforward of a convolutional layer.
+
+        Args:
+            y_l_minus_1 (list of numpy.ndarray): List of feature maps or
+            channels with (H, W)-dimension. No batch supported.
+        """
         x_l = []
         for i in range(self.in_channels):
             for j in range(i*self.out_channels, (i + 1)*self.out_channels):
