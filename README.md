@@ -1,6 +1,8 @@
 # Convolutional Neural Network from Scratch
 
-![header](data/header.png)
+<p align="center">
+  <img width="900" height="450" src="data/header.png" />
+</p>
 
 ## About
 
