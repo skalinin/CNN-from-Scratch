@@ -86,7 +86,7 @@ class Conv2d:
             weight.append(2*np.random.random(weight_shape)-1)
         return weight
 
-    def convolution_feed_x_l(self, y_l_minus_1, w_l):
+    def convolution_feed_x_l(self, y_l_minus_1, w_l, print_demo=False):
         stride = self.stride
         indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
         x_l = np.zeros((1, 1))  # x_l will expand as new elements are added
@@ -126,11 +126,13 @@ class Conv2d:
                         x_l = np.hstack((x_l, np.zeros((x_l.shape[0], 1))))
                     x_l[i][j] = result
                     # print demo matrix for tracking the convolution progress
-                    # print('i=' + str(i) + '; j=' + str(j) + '\n', demo)
+                    if print_demo:
+                        print('i=' + str(i) + '; j=' + str(j) + '\n', demo)
         return x_l
 
-    def convolution_back_dEdw_l(self, y_l_minus_1, w_l_shape, dEdx_l):
+    def convolution_back_dEdw_l(self, y_l_minus_1, dEdx_l, print_demo=False):
         stride = self.stride
+        w_l_shape = self.conv_w[0].shape
         indexes_a, indexes_b = get_axes_indexes(w_l_shape, self.kernel_center)
         dEdw_l = np.zeros((w_l_shape[0], w_l_shape[1]))
         if self.convolution:
@@ -160,10 +162,13 @@ class Conv2d:
                 # numbers to extract data from w_l
                 dEdw_l[indexes_a.index(a)][indexes_b.index(b)] = result
                 # print demo matrix for tracking the convolution progress
-                # print('a=' + str(a) + '; b=' + str(b) + '\n', demo)
+                if print_demo:
+                    print('a=' + str(a) + '; b=' + str(b) + '\n', demo)
         return dEdw_l
 
-    def convolution_back_dEdy_l_minus_1(self, dEdx_l, w_l, y_l_minus_1_shape):
+    def convolution_back_dEdy_l_minus_1(
+        self, dEdx_l, w_l, y_l_minus_1_shape, print_demo=False
+    ):
         indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
         dEdy_l_minus_1 = np.zeros((y_l_minus_1_shape[0], y_l_minus_1_shape[1]))
         if self.convolution:
@@ -188,7 +193,8 @@ class Conv2d:
                             demo[i_x_l][j_x_l] = w_l[a][b]
                 dEdy_l_minus_1[i][j] = result
                 # print demo matrix for tracking the convolution progress
-                # print('i=' + str(i) + '; j=' + str(j) + '\n', demo)
+                if print_demo:
+                    print('i=' + str(i) + '; j=' + str(j) + '\n', demo)
         return dEdy_l_minus_1
 
     def __call__(self, y_l_minus_1):
@@ -236,7 +242,6 @@ class Conv2d:
             for j in range(i*self.out_channels, (i + 1)*self.out_channels):
                 dEdw_l = self.convolution_back_dEdw_l(
                     y_l_minus_1=self.y_l_minus_1[i],
-                    w_l_shape=self.conv_w[j].shape,
                     dEdx_l=dEdx_l[k],
                 )
                 # the backprop for dE/dy_l_minus_1 accumulates data from all
@@ -373,7 +378,7 @@ class Maxpool2d:
         for i in range(len(y_l)):
             y_l_mp, y_l_mp_to_y_l = self.maxpool(y_l[i])
             list_of_y_l_mp.append(y_l_mp)
-            # y_l_mp_to_y_l is stored the text (coords of the selected elements
+            # y_l_mp_to_y_l stores the text (coords of the selected elements
             # during feedforward) and needed for backprop: dE/dy_l_mp -> dE/dy_l
             self.list_of_y_l_mp_to_y_l.append(y_l_mp_to_y_l)
         # take an input shape to restore it on the backprop stage
