@@ -54,13 +54,14 @@ class Conv2d:
         kernel_center (tuple of int): The kernel center indexes. The first
             index should be on the x-axis, and the second on the y-axis.
             Default is (0, 0)
-        convolution (book): Convolution or cross-correlation will be applied.
+        convolution (bool): Convolution or cross-correlation will be applied.
             Default is False, which means cross-correlation.
+        padding (int): Padding added to all four sides of the input. Default: 0
     """
 
     def __init__(
         self, kernel_size, in_channels, out_channels, stride=1,
-        kernel_center=(0, 0), convolution=False
+        kernel_center=(0, 0), padding=0, convolution=False
     ):
         self.stride = stride
         self.in_channels = in_channels
@@ -68,6 +69,7 @@ class Conv2d:
         self.kernel_size = kernel_size
         self.kernel_center = kernel_center
         self.convolution = convolution
+        self.padding = padding
 
         self.init_weights()
 
@@ -89,15 +91,20 @@ class Conv2d:
     def convolution_feed_x_l(self, y_l_minus_1, w_l, print_demo=False):
         stride = self.stride
         indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
-        x_l = np.zeros((1, 1))  # x_l will expand as new elements are added
+        y_l_minus_1 = np.pad(y_l_minus_1, self.padding)
+        h_out = int(
+            (y_l_minus_1.shape[0] - (self.kernel_size[0]-1) - 1) / stride + 1
+        )
+        w_out = int(
+            (y_l_minus_1.shape[1] - (self.kernel_size[1]-1) - 1) / stride + 1
+        )
+        x_l = np.zeros((h_out, w_out))
         if self.convolution:
             g = 1  # convolution
         else:
             g = -1  # cross-correlation
-        # iterate over the input y_l_minus_1 assuming that the dimension of the
-        # output x_l will be the same (x_l will expand during the calculations)
-        for i in range(y_l_minus_1.shape[0]):
-            for j in range(y_l_minus_1.shape[1]):
+        for i in range(h_out):
+            for j in range(w_out):
                 demo = np.zeros([y_l_minus_1.shape[0], y_l_minus_1.shape[1]])
                 result = 0
                 element_exists = False
@@ -120,10 +127,6 @@ class Conv2d:
                                 w_l[indexes_a.index(a)][indexes_b.index(b)]
                             element_exists = True
                 if element_exists:
-                    if i >= x_l.shape[0]:
-                        x_l = np.vstack((x_l, np.zeros(x_l.shape[1])))
-                    if j >= x_l.shape[1]:
-                        x_l = np.hstack((x_l, np.zeros((x_l.shape[0], 1))))
                     x_l[i][j] = result
                     # print demo matrix for tracking the convolution progress
                     if print_demo:
@@ -132,6 +135,7 @@ class Conv2d:
 
     def convolution_back_dEdw_l(self, y_l_minus_1, dEdx_l, print_demo=False):
         stride = self.stride
+        y_l_minus_1 = np.pad(y_l_minus_1, self.padding)
         w_l_shape = self.conv_w[0].shape
         indexes_a, indexes_b = get_axes_indexes(w_l_shape, self.kernel_center)
         dEdw_l = np.zeros((w_l_shape[0], w_l_shape[1]))
@@ -201,8 +205,8 @@ class Conv2d:
         """Feedforward of a convolutional layer.
 
         Args:
-            y_l_minus_1 (list of numpy.ndarray): List of feature maps or
-            channels with (H, W)-dimension. No batch supported.
+            y_l_minus_1 (list of numpy.ndarray): List of channels with
+                (H, W)-dimension. No batch supported.
         """
         x_l = []
         for i in range(self.in_channels):
@@ -318,28 +322,41 @@ class Maxpool2d:
             Default is (0, 0)
         convolution (book): Convolution or cross-correlation will be applied.
             Default is False, which means cross-correlation.
+        padding (int): Padding added to all four sides of the input. Default: 0
     """
 
     def __init__(
-        self, kernel_size, stride=1, kernel_center=(0, 0), convolution=False
+        self, kernel_size, stride=1, kernel_center=(0, 0), padding=0,
+        convolution=False
     ):
         self.kernel_size = kernel_size
         self.kernel_center = kernel_center
         self.stride = stride
         self.convolution = convolution
+        assert padding <= int(min(kernel_size) / 2), \
+            "pad should be smaller than or equal to half of kernel size"
+        self.padding = padding
 
     def maxpool(self, y_l):
+        # padd by -inf to be sure these values won't be selected by maxpooling
+        y_l = np.pad(y_l, self.padding, constant_values=-np.inf)
         indexes_a, indexes_b = get_axes_indexes(self.kernel_size,
                                                 self.kernel_center)
         stride = self.stride
-        y_l_mp = np.zeros((1, 1))  # y_l_mp will expand as new elements are added
-        y_l_mp_to_y_l = np.zeros((1, 1), dtype='<U32')
+        h_out = int(
+            (y_l.shape[0] - (self.kernel_size[0]-1) - 1) / stride + 1
+        )
+        w_out = int(
+            (y_l.shape[1] - (self.kernel_size[1]-1) - 1) / stride + 1
+        )
+        y_l_mp = np.zeros((h_out, w_out))
+        y_l_mp_to_y_l = np.zeros((h_out, w_out), dtype='<U32')
         if self.convolution:
             g = 1  # convolution
         else:
             g = -1  # cross-correlation
-        for i in range(y_l.shape[0]):
-            for j in range(y_l.shape[1]):
+        for i in range(h_out):
+            for j in range(w_out):
                 result = -np.inf
                 element_exists = False
                 for a in indexes_a:
@@ -352,21 +369,12 @@ class Maxpool2d:
                         ):
                             if y_l[i*stride - g*a][j*stride - g*b] > result:
                                 result = y_l[i*stride - g*a][j*stride - g*b]
-                                i_back = i*stride - g*a
-                                j_back = j*stride - g*b
-                            element_exists = True
+                                # subtract self.padding from coords to make
+                                # backprop correct for padded matrices
+                                i_back = i*stride - g*a - self.padding
+                                j_back = j*stride - g*b - self.padding
+                                element_exists = True
                 if element_exists:
-                    if i >= y_l_mp.shape[0]:
-                        y_l_mp = np.vstack((y_l_mp, np.zeros(y_l_mp.shape[1])))
-                        y_l_mp_to_y_l = np.vstack(
-                            (y_l_mp_to_y_l, np.zeros(y_l_mp_to_y_l.shape[1])))
-                    if j >= y_l_mp.shape[1]:
-                        y_l_mp = np.hstack(
-                            (y_l_mp, np.zeros((y_l_mp.shape[0], 1))))
-                        y_l_mp_to_y_l = np.hstack(
-                            (y_l_mp_to_y_l,
-                             np.zeros((y_l_mp_to_y_l.shape[0], 1)))
-                        )
                     y_l_mp[i][j] = result
                     y_l_mp_to_y_l[i][j] = str(i_back) + ',' + str(j_back)
         return y_l_mp, y_l_mp_to_y_l
