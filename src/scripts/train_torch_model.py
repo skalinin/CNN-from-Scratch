@@ -10,15 +10,15 @@ from cnn.transforms import PIL2numpy, Normalize, ToTensor
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 5, 2, 2)
-        self.conv2 = nn.Conv2d(5, 20, 3, 1, padding=1)
+        self.conv1 = nn.Conv2d(1, 5, 2, 1)
+        self.conv2 = nn.Conv2d(5, 20, 3, 2, padding=1)
         self.fc1 = nn.Linear(980, 2000)
         self.fc2 = nn.Linear(2000, 10)
 
     def forward(self, x):
         x = self.conv1(x)
         x = F.relu(x)
-        x = F.max_pool2d(x, 2)
+        x = F.max_pool2d(x, 2, stride=2, padding=1)
         x = self.conv2(x)
         x = torch.sigmoid(x)
         x = torch.flatten(x, 1)

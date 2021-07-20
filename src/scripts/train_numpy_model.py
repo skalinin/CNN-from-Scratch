@@ -11,20 +11,23 @@ from cnn.numpy_model import (
 class CnnFromScratch:
     def __init__(self):
         self.conv1 = Conv2d(
-            stride=2,
-            kernel_center=(0, 0),
+            stride=1,
             in_channels=1,
             out_channels=5,
             kernel_size=(2, 2),
         )
         self.conv2 = Conv2d(
-            stride=1,
-            kernel_center=(1, 1),
+            stride=2,
             in_channels=5,
             out_channels=20,
             kernel_size=(3, 3),
+            padding=1,
         )
-        self.max_pool = Maxpool2d(kernel_size=(2, 2), stride=2)
+        self.max_pool = Maxpool2d(
+            kernel_size=(2, 2),
+            stride=2,
+            padding=1
+        )
         self.fc1 = Linear(980, 2000)
         self.fc2 = Linear(2000, 10)
         self.flatten = Flatten()
