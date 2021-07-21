@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import argparse
 import torchvision
+import time
 
 from cnn.transforms import PIL2numpy, Normalize, ToTensor
 
@@ -57,6 +58,7 @@ def main(args):
     loss_log = []
     acc_log = []
     print_log_freq = args.print_log_freq
+    start_time = time.time()
     for idx, (image, target) in enumerate(train_loader):
         image = image.unsqueeze(0)  # Add channel to make input 4D
         optimizer.zero_grad()
@@ -72,8 +74,10 @@ def main(args):
             acc_avg = sum(acc_log)/len(acc_log)
             loss_log = []
             acc_log = []
+            loop_time = time.time() - start_time
+            start_time = time.time()
             print(f'Step {idx}, Loss: {loss_avg:.4f}, '
-                  f'Accyracy: {acc_avg:.4f}')
+                  f'Accyracy: {acc_avg:.4f}, loop time, sec: {loop_time:.1f}')
 
 
 if __name__ == '__main__':

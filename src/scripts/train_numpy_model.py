@@ -1,5 +1,6 @@
 import torchvision
 import argparse
+import time
 
 from cnn.transforms import PIL2numpy, Normalize, OneHot
 from cnn.numpy_model import (
@@ -97,6 +98,7 @@ def main(args):
     loss_log = []
     acc_log = []
     print_log_freq = args.print_log_freq
+    start_time = time.time()
     for idx, (image, target) in enumerate(train_dataset):
         predict = model([image], target)
         loss = criterion(target, predict)
@@ -111,8 +113,10 @@ def main(args):
             acc_avg = sum(acc_log)/len(acc_log)
             loss_log = []
             acc_log = []
+            loop_time = time.time() - start_time
+            start_time = time.time()
             print(f'Step {idx}, Loss: {loss_avg:.4f}, '
-                  f'Accyracy: {acc_avg:.4f}')
+                  f'Accyracy: {acc_avg:.4f}, loop time, sec: {loop_time:.1f}')
 
 
 if __name__ == '__main__':
