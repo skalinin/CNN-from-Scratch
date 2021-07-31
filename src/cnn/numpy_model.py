@@ -38,7 +38,6 @@ def get_axes_indexes(kernel_size, kernel_center):
 
 def load_weight_from_npy(weight_name, load_path):
     weight = np.load(load_path, allow_pickle=True).item().get(weight_name)
-    print(f'Weight for {weight_name} was loaded')
     return weight
 
 
@@ -174,7 +173,8 @@ class Conv2d:
         self, dEdx_l, w_l, y_l_minus_1_shape, print_demo=False
     ):
         indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
-        dEdy_l_minus_1 = np.zeros((y_l_minus_1_shape[0], y_l_minus_1_shape[1]))
+        dEdy_l_minus_1 = np.zeros((y_l_minus_1_shape[0] + 2*self.padding,
+                                   y_l_minus_1_shape[1] + 2*self.padding))
         if self.convolution:
             g = 1  # convolution
         else:
@@ -199,6 +199,10 @@ class Conv2d:
                 # print demo matrix for tracking the convolution progress
                 if print_demo:
                     print('i=' + str(i) + '; j=' + str(j) + '\n', demo)
+        # cut initial y_l_minus_1 shape with no padding from dEdy_l_minus_1
+        dEdy_l_minus_1 = \
+            dEdy_l_minus_1[self.padding:(y_l_minus_1_shape[0]+self.padding),
+                           self.padding:(y_l_minus_1_shape[1]+self.padding)]
         return dEdy_l_minus_1
 
     def __call__(self, y_l_minus_1):
@@ -407,7 +411,9 @@ class Maxpool2d:
                     coordinates = self.list_of_y_l_mp_to_y_l[i][k][e]
                     coordinate_row = int(coordinates[:coordinates.find(',')])
                     coordinate_col = int(coordinates[coordinates.find(',')+1:])
-                    dEdy_l[coordinate_row][coordinate_col] = dEdy_l_mp[i][k][e]
+                    # addition - in case one element was selected as the
+                    # maximum several times
+                    dEdy_l[coordinate_row][coordinate_col] += dEdy_l_mp[i][k][e]
             list_of_dEdy_l.append(dEdy_l)
         return list_of_dEdy_l
 
