@@ -24,9 +24,9 @@ RUN pip3 install --no-cache-dir numpy==1.20.3
 
 # Install PyTorch
 RUN pip3 install --no-cache-dir \
-    torch==1.8.1+cpu \
-    torchvision==0.9.1+cpu \
-    torchaudio==0.8.1 \
+    torch==1.9.0+cpu \
+    torchvision==0.10.0+cpu \
+    torchaudio==0.9.0 \
     -f https://download.pytorch.org/whl/torch_stable.html
 
 # Install python ML packages
