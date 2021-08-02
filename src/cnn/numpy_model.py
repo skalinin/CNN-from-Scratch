@@ -46,7 +46,7 @@ class Conv2d:
     input planes.
 
     Args:
-        kernel_size (tuple of int): Size of the convolving kernel.
+        kernel_size (tuple of int or int): Size of the convolving kernel.
         in_channels (int): Number of channels in the input image.
         out_channels (int): Number of channels produced by the convolution.
         stride (int): Stride of the convolution. Default is 1.
@@ -59,13 +59,16 @@ class Conv2d:
     """
 
     def __init__(
-        self, kernel_size, in_channels, out_channels, stride=1,
+        self, in_channels, out_channels, kernel_size, stride=1,
         kernel_center=(0, 0), padding=0, convolution=False
     ):
         self.stride = stride
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.kernel_size = kernel_size
+        if isinstance(kernel_size, tuple):
+            self.kernel_size = kernel_size
+        else:
+            self.kernel_size = (kernel_size, kernel_size)
         self.kernel_center = kernel_center
         self.convolution = convolution
         self.padding = padding
@@ -97,14 +100,14 @@ class Conv2d:
         w_out = int(
             (y_l_minus_1.shape[1] - (self.kernel_size[1]-1) - 1) / stride + 1
         )
-        x_l = np.zeros((h_out, w_out))
+        x_l = np.zeros((h_out, w_out), dtype=np.float32)
         if self.convolution:
             g = 1  # convolution
         else:
             g = -1  # cross-correlation
         for i in range(h_out):
             for j in range(w_out):
-                demo = np.zeros([y_l_minus_1.shape[0], y_l_minus_1.shape[1]])
+                demo = np.zeros([y_l_minus_1.shape[0], y_l_minus_1.shape[1]], dtype=np.float32)
                 result = 0
                 element_exists = False
                 for a in indexes_a:
@@ -137,14 +140,14 @@ class Conv2d:
         y_l_minus_1 = np.pad(y_l_minus_1, self.padding)
         w_l_shape = self.conv_w[0].shape
         indexes_a, indexes_b = get_axes_indexes(w_l_shape, self.kernel_center)
-        dEdw_l = np.zeros((w_l_shape[0], w_l_shape[1]))
+        dEdw_l = np.zeros((w_l_shape[0], w_l_shape[1]), dtype=np.float32)
         if self.convolution:
             g = 1  # convolution
         else:
             g = -1  # cross-correlation
         for a in indexes_a:
             for b in indexes_b:
-                demo = np.zeros([y_l_minus_1.shape[0], y_l_minus_1.shape[1]])
+                demo = np.zeros([y_l_minus_1.shape[0], y_l_minus_1.shape[1]], dtype=np.float32)
                 result = 0
                 for i in range(dEdx_l.shape[0]):
                     for j in range(dEdx_l.shape[1]):
@@ -174,7 +177,7 @@ class Conv2d:
     ):
         indexes_a, indexes_b = get_axes_indexes(w_l.shape, self.kernel_center)
         dEdy_l_minus_1 = np.zeros((y_l_minus_1_shape[0] + 2*self.padding,
-                                   y_l_minus_1_shape[1] + 2*self.padding))
+                                   y_l_minus_1_shape[1] + 2*self.padding), dtype=np.float32)
         if self.convolution:
             g = 1  # convolution
         else:
@@ -182,7 +185,7 @@ class Conv2d:
         for i in range(dEdy_l_minus_1.shape[0]):
             for j in range(dEdy_l_minus_1.shape[1]):
                 result = 0
-                demo = np.zeros([dEdx_l.shape[0], dEdx_l.shape[1]])
+                demo = np.zeros([dEdx_l.shape[0], dEdx_l.shape[1]], dtype=np.float32)
                 for i_x_l in range(dEdx_l.shape[0]):
                     for j_x_l in range(dEdx_l.shape[1]):
                         a = g*i_x_l*self.stride - g*i
@@ -267,7 +270,7 @@ class Conv2d:
 
 class Sigmoid:
     def __call__(self, x_l):
-        x_l = np.array(x_l)
+        x_l = np.array(x_l, dtype=np.float32)
         y_l = 1 / (1+np.exp(-x_l))
         self.y_l = y_l  # need for backprop
         return y_l
@@ -280,13 +283,13 @@ class Sigmoid:
 
 class Softmax:
     def __call__(self, x_l):
-        x_l = np.array(x_l)
+        x_l = np.array(x_l, dtype=np.float32)
         y_l = np.exp(x_l) / np.exp(x_l).sum()
         self.y_l = y_l  # need for backprop
         return y_l
 
     def backprop(self, dEdy_l):
-        dy_ldx_l = np.zeros((self.y_l.shape[1], self.y_l.shape[1]))
+        dy_ldx_l = np.zeros((self.y_l.shape[1], self.y_l.shape[1]), dtype=np.float32)
         for i in range(dy_ldx_l.shape[1]):
             for j in range(dy_ldx_l.shape[1]):
                 if i == j:
@@ -299,14 +302,14 @@ class Softmax:
 
 class ReLU:
     def __call__(self, x_l):
-        x_l = np.array(x_l)
+        x_l = np.array(x_l, dtype=np.float32)
         # zero out the elements that do not pass the condition
         y_l = np.where(x_l > 0, x_l, 0)
         self.y_l = y_l  # need for backprop
         return y_l
 
     def backprop(self, dEdy_l):
-        dy_ldx_l = np.where(self.y_l < 0, self.y_l, 1)
+        dy_ldx_l = np.where(self.y_l <= 0, self.y_l, 1)
         # there are no negative elements in y_l after relu feedforward pass
         # so we do not neet to zero out negative elements
         # dy_ldx_l = np.where(dy_ldx_l > 0, dy_ldx_l, 0)
@@ -319,7 +322,7 @@ class Maxpool2d:
     input planes.
 
     Args:
-        kernel_size (tuple of int): Size of the maxpooling kernel.
+        kernel_size (tuple of int or int): Size of the maxpooling kernel.
         stride (int): Stride of the maxpooling. Default is 1.
         kernel_center (tuple of int): The kernel center indexes. The first
             index should be on the x-axis, and the second on the y-axis.
@@ -333,11 +336,14 @@ class Maxpool2d:
         self, kernel_size, stride=1, kernel_center=(0, 0), padding=0,
         convolution=False
     ):
-        self.kernel_size = kernel_size
+        if isinstance(kernel_size, tuple):
+            self.kernel_size = kernel_size
+        else:
+            self.kernel_size = (kernel_size, kernel_size)
         self.kernel_center = kernel_center
         self.stride = stride
         self.convolution = convolution
-        assert padding <= int(min(kernel_size) / 2), \
+        assert padding <= int(min(self.kernel_size) / 2), \
             "pad should be smaller than or equal to half of kernel size"
         self.padding = padding
 
@@ -353,7 +359,7 @@ class Maxpool2d:
         w_out = int(
             (y_l.shape[1] - (self.kernel_size[1]-1) - 1) / stride + 1
         )
-        y_l_mp = np.zeros((h_out, w_out))
+        y_l_mp = np.zeros((h_out, w_out), dtype=np.float32)
         y_l_mp_to_y_l = np.zeros((h_out, w_out), dtype='<U32')
         if self.convolution:
             g = 1  # convolution
@@ -402,7 +408,7 @@ class Maxpool2d:
         list_of_dEdy_l = []
         for i in range(len(dEdy_l_mp)):
             # dEdy_l will expand as new elements are added
-            dEdy_l = np.zeros(self.y_l_shape)
+            dEdy_l = np.zeros(self.y_l_shape, dtype=np.float32)
             for k in range(dEdy_l_mp[i].shape[0]):
                 for e in range(dEdy_l_mp[i].shape[1]):
                     # each element of the dEdy_l_mp must be placed in the
@@ -483,7 +489,7 @@ class MSELoss:
 
 class Flatten:
     def matrices2vector(self, matrices):
-        vector = np.array([[]])
+        vector = np.array([[]], dtype=np.float32)
         self.matrix_shape = matrices[0].shape
         for i in range(len(matrices)):
             reshaped_matrix = np.reshape(
