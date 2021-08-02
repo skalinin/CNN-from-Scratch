@@ -24,6 +24,6 @@ class OneHot:
         self.num_classes = num_classes
 
     def __call__(self, target):
-        one_hot_target = np.zeros(self.num_classes)
+        one_hot_target = np.zeros(self.num_classes, dtype=np.float32)
         one_hot_target[target] = 1
         return one_hot_target
