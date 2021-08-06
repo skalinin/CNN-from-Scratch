@@ -38,6 +38,8 @@ def main(args):
     converter. The weights are first initialized in the torch model, and than
     converted to the numpy model.
     """
+    if args.torch_seed:
+        torch.manual_seed(args.torch_seed)
     model = Net()
     torch.save(model.state_dict(), args.torch_model_path)
     np.save(
@@ -63,6 +65,7 @@ if __name__ == '__main__':
     parser.add_argument('--numpy_model_path', type=str,
                         default='/workdir/data/numpy_init_weights.npy',
                         help='Path to save initial numpy model weights')
+    parser.add_argument('--torch_seed', type=int, help='Torch random seed')
     args = parser.parse_args()
 
     main(args)
