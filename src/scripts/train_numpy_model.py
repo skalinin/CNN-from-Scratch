@@ -11,11 +11,11 @@ from cnn.numpy_model import (
 
 class CnnFromScratch:
     def __init__(self):
-        self.conv1 = Conv2d(1, 5, 2, 3)
-        self.conv2 = Conv2d(5, 20, 3, 1, padding=1)
+        self.conv1 = Conv2d(1, 2, 3, 1)
+        self.conv2 = Conv2d(2, 5, 2, 2, padding=1)
         self.max_pool = Maxpool2d(2, 2, padding=1)
-        self.fc1 = Linear(500, 2000)
-        self.fc2 = Linear(2000, 10)
+        self.fc1 = Linear(320, 1000)
+        self.fc2 = Linear(1000, 10)
         self.flatten = Flatten()
         self.relu = ReLU()
         self.sigmoid1 = Sigmoid()
@@ -96,8 +96,8 @@ def train_loop(dataset, model, criterion, print_log_freq, lr):
             acc_avg = sum(acc_log[-print_log_freq:])/print_log_freq
             loop_time = time.time() - start_time
             start_time = time.time()
-            print(f'Train step {idx}, Loss: {loss_avg:.4f}, '
-                  f'Acc: {acc_avg:.4f}, loop time: {loop_time:.1f}')
+            print(f'Train step {idx}, Loss: {loss_avg:.5f}, '
+                  f'Acc: {acc_avg:.4f}, time: {loop_time:.1f}')
 
 
 def val_loop(dataset, model, criterion):
@@ -113,8 +113,8 @@ def val_loop(dataset, model, criterion):
     loss_avg = sum(loss_log)/len(loss_log)
     acc_avg = sum(acc_log)/len(acc_log)
     loop_time = time.time() - start_time
-    print(f'Val step, Loss: {loss_avg:.4f}, '
-          f'Acc: {acc_avg:.4f}, loop time: {loop_time:.1f}')
+    print(f'Val step, Loss: {loss_avg:.5f}, '
+          f'Acc: {acc_avg:.4f}, time: {loop_time:.1f}')
 
 
 def main(args):

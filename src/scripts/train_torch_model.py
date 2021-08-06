@@ -11,11 +11,11 @@ from cnn.transforms import PIL2numpy, Normalize, ToTensor
 class Net(nn.Module):
     def __init__(self):
         super(Net, self).__init__()
-        self.conv1 = nn.Conv2d(1, 5, 2, 3)
-        self.conv2 = nn.Conv2d(5, 20, 3, 1, padding=1)
+        self.conv1 = nn.Conv2d(1, 2, 3, 1)
+        self.conv2 = nn.Conv2d(2, 5, 2, 2, padding=1)
         self.maxpool = nn.MaxPool2d(2, 2, padding=1)
-        self.fc1 = nn.Linear(500, 2000)
-        self.fc2 = nn.Linear(2000, 10)
+        self.fc1 = nn.Linear(320, 1000)
+        self.fc2 = nn.Linear(1000, 10)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -73,8 +73,8 @@ def train_loop(dataset, model, criterion, optimizer, print_log_freq):
             acc_avg = sum(acc_log[-print_log_freq:])/print_log_freq
             loop_time = time.time() - start_time
             start_time = time.time()
-            print(f'Train step {idx}, Loss: {loss_avg:.4f}, '
-                  f'Acc: {acc_avg:.4f}, loop time: {loop_time:.1f}')
+            print(f'Train step {idx}, Loss: {loss_avg:.5f}, '
+                  f'Acc: {acc_avg:.4f}, time: {loop_time:.1f}')
 
 
 def val_loop(dataset, model, criterion):
@@ -93,8 +93,8 @@ def val_loop(dataset, model, criterion):
     loss_avg = sum(loss_log)/len(loss_log)
     acc_avg = sum(acc_log)/len(acc_log)
     loop_time = time.time() - start_time
-    print(f'Val step, Loss: {loss_avg:.4f}, '
-          f'Acc: {acc_avg:.4f}, loop time: {loop_time:.1f}')
+    print(f'Val step, Loss: {loss_avg:.5f}, '
+          f'Acc: {acc_avg:.4f}, time: {loop_time:.1f}')
 
 
 def main(args):
