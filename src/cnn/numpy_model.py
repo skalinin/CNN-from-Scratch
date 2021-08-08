@@ -343,8 +343,11 @@ class Maxpool2d:
         self.kernel_center = kernel_center
         self.stride = stride
         self.convolution = convolution
+        if convolution and padding > 0:
+            raise AssertionError("Padding in maxpooling can not be in "
+                                 "convolution, due to the inverted kernel")
         assert padding <= int(min(self.kernel_size) / 2), \
-            "pad should be smaller than or equal to half of kernel size"
+            "Pad should be smaller than or equal to half of kernel size."
         self.padding = padding
 
     def maxpool(self, y_l):
