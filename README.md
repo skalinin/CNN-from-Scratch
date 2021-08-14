@@ -33,7 +33,7 @@ The provided [Dockerfile](Dockerfile) is supplied to build an image with all the
 To create identical initial weights for numpy and torch models:
 
 ```bash
-python src/scripts/make_init_weights.py
+python src/scripts/make_init_weights.py --torch_seed 1234
 ```
 
 To start a numpy model training:
