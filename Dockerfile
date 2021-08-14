@@ -5,11 +5,8 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update &&\
     apt-get -y install \
     build-essential yasm nasm cmake \
-    unzip git htop nvtop wget curl tmux \
-    sysstat libtcmalloc-minimal4 pkgconf autoconf libtool flex bison \
-    python3 python3-pip python3-dev python3-setuptools \
-    libglib2.0-0 libgl1-mesa-glx \
-    libsm6 libxext6 libxrender1 libssl-dev libx264-dev libsndfile1 libmp3lame-dev &&\
+    git htop tmux \
+    python3 python3-pip python3-dev python3-setuptools &&\
     ln -s /usr/bin/python3 /usr/bin/python &&\
     ln -sf /usr/bin/pip3 /usr/bin/pip &&\
     apt-get clean &&\
@@ -26,7 +23,6 @@ RUN pip3 install --no-cache-dir numpy==1.20.3
 RUN pip3 install --no-cache-dir \
     torch==1.9.0+cpu \
     torchvision==0.10.0+cpu \
-    torchaudio==0.9.0 \
     -f https://download.pytorch.org/whl/torch_stable.html
 
 # Install python ML packages
