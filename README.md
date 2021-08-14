@@ -11,7 +11,7 @@ A Python implementation of a CNN with only numpy. All theory and formulas behind
 Also, to check whether the numpy model gets plausible results, it is compared with a similar CNN architecture based on pytorch. Both models have the same initial weights and are trained on the MNIST dataset (all training images are given in the same order) - so you can compare the losses of the models after each cycle and make sure that the numpy-implementation is correct.
 
 <p align="center">
-  <img width="1000" height="400" src="data/compare_model_results.jpg" />
+  <img width="900" height="400" src="data/compare_model_results.jpg" />
 </p>
 
 
