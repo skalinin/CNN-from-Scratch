@@ -137,7 +137,7 @@ if __name__ == '__main__':
                         help='Frequency of printing of training logs')
     parser.add_argument('--load_path', type=str, default='',
                         help='Path to model weights to start training with')
-    parser.add_argument('--num_epochs', type=int, default=1,
+    parser.add_argument('--num_epochs', type=int, default=10,
                         help='Total number of epochs')
     parser.add_argument('--lr', type=float, default=0.01,
                         help='learning rate')
